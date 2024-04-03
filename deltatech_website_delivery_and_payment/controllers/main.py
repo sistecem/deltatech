@@ -11,6 +11,9 @@ class WebsiteSale(Base):
     @route("/shop/carrier_acquirer_check", type="json", auth="public", website=True, sitemap=False)
     def carrier_acquirer_check(self, carrier_id=None, acquirer_id=None, **kw):
         result = {"status": False, "all_acquirer": True}
+        if not carrier_id:
+            result = {"status": True, "all_acquirer": True}
+            return result
         carrier = request.env["delivery.carrier"].sudo().browse(int(carrier_id))
         if acquirer_id is None:
             acquirer_id = 0
@@ -27,7 +30,6 @@ class WebsiteSale(Base):
                 result = {"status": True, "all_acquirer": True}
 
         if acquirer_id:
-
             context = dict(request.context)
             context.setdefault("acquirer_id", acquirer_id)
             request.context = context

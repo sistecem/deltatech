@@ -13,7 +13,7 @@ class AccountInvoice(models.Model):
     _inherit = "account.move"
 
     def action_post(self):
-        res = super(AccountInvoice, self).action_post()
+        res = super().action_post()
         for invoice in self:
             if invoice.move_type == "out_invoice":
                 equipments = self.env["service.equipment"]
@@ -21,10 +21,10 @@ class AccountInvoice(models.Model):
                     equipments |= line.agreement_line_id.equipment_id
                 if equipments:
                     equipments.compute_revenues()
+                    equipments.compute_total_percent()
         return res
 
     def get_counter_lines(self):
-
         consumptions = self.env["service.consumption"].search([("invoice_id", "in", self.ids)])
 
         readings = self.env["service.meter.reading"].search([("consumption_id", "in", consumptions.ids)])

@@ -150,6 +150,8 @@ class ServiceAgreement(models.Model):
         store=True,
     )
 
+    unpaid_invoices = fields.Integer(string="Unpaid invoices", compute="_compute_unpaid_invoices")
+
     billing_automation = fields.Selection(
         [("auto", "Auto"), ("manual", "Manual")], string="Billing automation", default="manual"
     )
@@ -182,7 +184,6 @@ class ServiceAgreement(models.Model):
             )
 
     def attachment_tree_view(self):
-
         domain = ["&", ("res_model", "=", "service.agreement"), ("res_id", "in", self.ids)]
 
         return {
@@ -208,6 +209,18 @@ class ServiceAgreement(models.Model):
         action["domain"] = [("id", "=", invoices.ids)]
         return action
 
+    def show_unpaid_invoices(self):
+        action = self.env["ir.actions.actions"]._for_xml_id("account.action_move_out_invoice_type")
+        domain = [
+            ("partner_id", "=", self.partner_id.commercial_partner_id.id),
+            ("state", "=", "posted"),
+            ("move_type", "=", "out_invoice"),
+            ("payment_state", "in", ["not_paid", "partial"]),
+        ]
+        invoices = self.env["account.move"].search(domain)
+        action["domain"] = [("id", "=", invoices.ids)]
+        return action
+
     def compute_totals(self):
         for agreement in self:
             total_consumption = 0.0
@@ -228,7 +241,6 @@ class ServiceAgreement(models.Model):
     # TODO: de legat acest contract la un cont analitic ...
     @api.depends("last_invoice_id")
     def _compute_next_date_invoice(self):
-
         # query = """
         #     select distinct *
         #         from  (
@@ -280,6 +292,19 @@ class ServiceAgreement(models.Model):
             else:
                 agreement.display_name = agreement.name
 
+    def _compute_unpaid_invoices(self):
+        for agreement in self:
+            partner_id = agreement.partner_id.commercial_partner_id
+            invoice_count = self.env["account.move"].search_count(
+                [
+                    ("partner_id", "=", partner_id.id),
+                    ("move_type", "=", "out_invoice"),
+                    ("payment_state", "in", ["not_paid", "partial"]),
+                    ("state", "=", "posted"),
+                ]
+            )
+            agreement.unpaid_invoices = invoice_count
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -287,7 +312,7 @@ class ServiceAgreement(models.Model):
                 sequence_agreement = self.env.ref("deltatech_service.sequence_agreement")
                 if sequence_agreement:
                     vals["name"] = sequence_agreement.next_by_id()
-        return super(ServiceAgreement, self).create(vals_list)
+        return super().create(vals_list)
 
     def contract_close(self):
         return self.write({"state": "closed"})
@@ -302,7 +327,7 @@ class ServiceAgreement(models.Model):
         for item in self:
             if item.state != "draft":
                 raise UserError(_("You cannot delete a service agreement which is not draft."))
-        return super(ServiceAgreement, self).unlink()
+        return super().unlink()
 
     def get_agreements_auto_billing(self):
         agreements = self.search([("billing_automation", "=", "auto"), ("state", "=", "open")])

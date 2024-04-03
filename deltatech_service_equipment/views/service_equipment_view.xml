@@ -23,6 +23,7 @@
                 <field name="activity_ids" widget="list_activity" optional="show" />
                 <field name="total_revenues" sum="total" />
                 <field name="total_costs" sum="total" />
+                <field name="total_percent" />
                 <field name="analytic_account_id" optional="hide" />
                 <field name="message_unread" invisible="1" />
                 <field
@@ -132,6 +133,7 @@
                         >
                             <span class="o_stat_text">Meter Readings</span>
                         </button>-->
+
                         <button
                             type="object"
                             class="oe_stat_button"
@@ -157,6 +159,15 @@
                                 <span class="o_stat_text">Revenues</span>
                             </div>
                         </button>
+                        <button class="oe_stat_button" id="totals_button" icon="fa-percent" name="totals_button">
+                            <div class="o_form_field o_stat_info">
+                                <span class="o_stat_value">
+                                    <field string="Total percent" name="total_percent" />
+                                </span>
+                                <span class="o_stat_text">Total percent</span>
+                            </div>
+                        </button>
+
 
                         <button
                             type="object"
@@ -198,6 +209,7 @@
                         </group>
                         <group string="Stock">
                             <field name="product_id" />
+                            <field name="product_category_id" readonly="1" />
                             <field
                                 name="serial_id"
                                 domain="[('product_id','=',product_id)]"
@@ -314,6 +326,7 @@
                 <field name="serial_id" />
                 <field name="ean_code" />
                 <field name="product_id" />
+                <field name="product_category_id" />
                 <separator />
                 <filter name="last_reading" date="last_reading" default_period="this_month" />
                 <separator />
@@ -322,6 +335,11 @@
                     <filter string="Location" name="location" context="{'group_by':'location_id'}" />
                     <filter string="Region" name="state_id" context="{'group_by':'location_state_id'}" />
                     <filter string="Status agreement" name="agreement_state" context="{'group_by':'agreement_state'}" />
+                    <filter
+                        string="Product category"
+                        name="product_category"
+                        context="{'group_by':'product_category_id'}"
+                    />
                 </group>
             </search>
         </field>

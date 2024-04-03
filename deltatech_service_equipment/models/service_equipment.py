@@ -41,7 +41,7 @@ class ServiceEquipment(models.Model):
 
     agreement_id = fields.Many2one("service.agreement", string="Contract Service")
     agreement_type_id = fields.Many2one(
-        "service.agreement.type", string="Agreement Type", related="agreement_id.type_id"
+        "service.agreement.type", string="Agreement Type", related="agreement_id.type_id", store=True
     )
     agreement_state = fields.Selection(string="Status contract", store=True, related="agreement_id.state")
 
@@ -82,6 +82,8 @@ class ServiceEquipment(models.Model):
     total_revenues = fields.Float(string="Total Revenues", readonly=True)
     # se va calcula din suma avizelor
     total_costs = fields.Float(string="Total cost", readonly=True)
+    # se va calcula (costs/revenues)*100
+    total_percent = fields.Float(string="Total percent equipment", readonly=True)
 
     note = fields.Text(string="Notes")
     start_date = fields.Date(string="Start Date")
@@ -106,6 +108,7 @@ class ServiceEquipment(models.Model):
     product_id = fields.Many2one(
         "product.product", string="Product", ondelete="restrict", domain=[("type", "=", "product")]
     )
+    product_category_id = fields.Many2one("product.category", related="product_id.categ_id", store=True)
     serial_id = fields.Many2one("stock.production.lot", string="Serial Number", ondelete="restrict", copy=False)
     # quant_id = fields.Many2one('stock.quant', string='Quant', copy=False)  #  ondelete="restrict",
     location_id = fields.Many2one(
@@ -152,7 +155,7 @@ class ServiceEquipment(models.Model):
             if sequence:
                 vals["name"] = sequence.next_by_id()
 
-        return super(ServiceEquipment, self).create(vals)
+        return super().create(vals)
 
     def write(self, vals):
         if ("name" in vals) and (vals.get("name") in ("/", False)):
@@ -160,7 +163,7 @@ class ServiceEquipment(models.Model):
             sequence = self.env.ref("deltatech_service_equipment.sequence_equipment")
             if sequence:
                 vals["name"] = sequence.next_by_id()
-        return super(ServiceEquipment, self).write(vals)
+        return super().write(vals)
 
     @api.depends("serial_id.quant_ids")
     def _compute_location(self):
@@ -196,6 +199,7 @@ class ServiceEquipment(models.Model):
             for row in res:
                 equipment = self.env["service.equipment"].browse(row[0])
                 equipment.write({"total_revenues": round(row[1], 2)})
+                equipment.compute_total_percent()
 
     def compute_costs(self):
         """
@@ -227,6 +231,7 @@ class ServiceEquipment(models.Model):
             for row in res:
                 equipment = self.env["service.equipment"].browse(row[0])
                 equipment.write({"total_costs": round(row[1], 2)})
+                equipment.compute_total_percent()
 
     def costs_and_revenues(self):
         self.compute_totals()
@@ -234,7 +239,6 @@ class ServiceEquipment(models.Model):
     @api.depends("location_id")
     def _compute_location_type(self):
         for equipment in self:
-
             if equipment.location_id.usage == "customer":
                 equipment.location_type = "customer"
             elif equipment.location_id.usage == "internal":
@@ -360,7 +364,7 @@ class ServiceEquipment(models.Model):
             equipment_ids = self.search(["|", ("serial_id", "ilike", name), ("ean_code", "ilike", name)], limit=10)
             if equipment_ids:
                 res_serial = equipment_ids.name_get()
-        res = super(ServiceEquipment, self).name_search(name, args, operator=operator, limit=limit) + res_serial
+        res = super().name_search(name, args, operator=operator, limit=limit) + res_serial
         return res
 
     def name_get(self):
@@ -375,6 +379,15 @@ class ServiceEquipment(models.Model):
                 name += "/" + equipment.emplacement
             res.append((equipment.id, name))
         return res
+
+    def compute_total_percent(self):
+        for equipment in self:
+            if equipment.total_revenues:
+                equipment.write(
+                    {"total_percent": round(((-1 * equipment.total_costs) / equipment.total_revenues) * 100, 2)}
+                )
+            else:
+                equipment.write({"total_percent": 0.0})
 
 
 # se va utiliza maintenance.equipment.category

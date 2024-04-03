@@ -12,16 +12,13 @@ class AccountAveragePaymentReport(models.Model):
     _auto = False
     _rec_name = "date"
 
-    # invoice_id = fields.Many2one('account.invoice', string='Invoice', readonly=True)
     partner_id = fields.Many2one("res.partner", string="Partner", readonly=True)
     date = fields.Date(string="Date")
     payment_date = fields.Date(string="Payment Date", readonly=True)
     payment_days = fields.Integer(string="Payment Days", readonly=True, group_operator="avg")
-    # period_id = fields.Many2one('account.period', string="Period", readonly=True)
     journal_id = fields.Many2one("account.journal", string="Journal", readonly=True)
     move_id = fields.Many2one("account.move", string="Account Move", readonly=True)
     ref = fields.Char("Reference", readonly=True)
-    # invoice_id = fields.Many2one('account.invoice',string="Invoice",readonly=True)
     account_code = fields.Char(string="Account Code", readonly=True)
     account_id = fields.Many2one("account.account", string="Account", readonly=True)
     debit = fields.Float("Debit", readonly=True)
@@ -29,24 +26,21 @@ class AccountAveragePaymentReport(models.Model):
     balance = fields.Float("Balance", readonly=True)
     pondere = fields.Float("Pondere", readonly=True)
     amount = fields.Float("Amount", readonly=True)
+    payment_days_simple = fields.Float("Plain payment days", readonly=True, group_operator="avg")
 
     @api.model
     def read_group(self, domain, fields, groupby, offset=0, limit=None, orderby=False, lazy=True):
-
         new_fields = []
         new_fields += fields
 
         if "payment_days" in fields:
-
             # new_fields.remove('payment_days')
             if "pondere" not in new_fields:
                 new_fields.append("pondere")
             if "amount" not in new_fields:
                 new_fields.append("amount")
 
-        res = super(AccountAveragePaymentReport, self).read_group(
-            domain, new_fields, groupby, offset=offset, limit=limit, orderby=orderby, lazy=lazy
-        )
+        res = super().read_group(domain, new_fields, groupby, offset=offset, limit=limit, orderby=orderby, lazy=lazy)
 
         # new_res = self.read_group(cr, uid, domain, new_fields, groupby, offset, limit, context, orderby, lazy)
         if "payment_days" in fields:
@@ -54,7 +48,6 @@ class AccountAveragePaymentReport(models.Model):
                 pondere = line.get("pondere", 0.0)
                 amount = line.get("amount", 0.0)
                 if line["amount"] != 0.0 and pondere and amount:
-
                     line["payment_days"] = pondere / amount
                 else:
                     line["payment_days"] = 0.0
@@ -83,7 +76,8 @@ class AccountAveragePaymentReport(models.Model):
 
             abs(coalesce(l.debit, 0.0) - coalesce(l.credit, 0.0)) * l.payment_days as pondere,
             abs(coalesce(l.debit, 0.0) - coalesce(l.credit, 0.0))  as amount,
-            coalesce(l.debit, 0.0) - coalesce(l.credit, 0.0) as balance
+            coalesce(l.debit, 0.0) - coalesce(l.credit, 0.0) as balance,
+            l.payment_days_simple as payment_days_simple
 
 
         from    account_move_line l

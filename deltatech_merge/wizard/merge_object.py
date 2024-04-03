@@ -11,7 +11,7 @@ import psycopg2
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
-from odoo.tools import mute_logger
+from odoo.tools import is_html_empty, mute_logger
 
 _logger = logging.getLogger("merge.object")
 
@@ -24,7 +24,6 @@ class MergeDummy(models.TransientModel):
 
 
 class MergeObjectLine(models.TransientModel):
-
     _name = "merge.object.line"
     _description = "Merge Object Line"
     _order = "min_id asc"
@@ -66,7 +65,7 @@ class MergeObject(models.TransientModel):
 
     @api.model
     def default_get(self, fields_list):
-        res = super(MergeObject, self).default_get(fields_list)
+        res = super().default_get(fields_list)
         active_ids = self.env.context.get("active_ids")
         if self.env.context.get("active_model") == self._model_merge and active_ids:
             res["state"] = "selection"
@@ -271,13 +270,19 @@ class MergeObject(models.TransientModel):
             else:
                 return item
 
+        def has_value(field, item, column):
+            if field.type == "html":
+                return not is_html_empty(item[column])
+            else:
+                return item[column]
+
         # get all fields that are not computed or x2many
         values = dict()
         for column in model_fields:
             field = dst_object._fields[column]
             if field.type not in ("many2many", "one2many") and field.compute is None:
                 for item in itertools.chain(src_objects, [dst_object]):
-                    if item[column]:
+                    if has_value(field, item, column):
                         if column in summable_fields and values.get(column):
                             values[column] += write_serializer(item[column])
                         else:
@@ -294,6 +299,23 @@ class MergeObject(models.TransientModel):
                 _logger.info(
                     "Skip recursive object hierarchies for parent_id %s of object: %s", parent_id, dst_object.id
                 )
+
+    @api.model
+    def _update_computed_fields(self, dst_object):
+        """Update stored computed fields of dst_object.
+        :param dst_object : record of destination res.object
+        """
+        Object = self.env[self._model_merge]
+        for field_name in Object._fields:
+            field = Object._fields[field_name]
+            if field.compute and field.store:
+                obj = dst_object
+                if field.compute_sudo:
+                    obj = obj.sudo()
+                self.env.add_to_compute(field, obj)
+        # In a testing environment (shell) it is necessary to call cache
+        # invalidation before recompute using `self.env.cache.invalidate()`
+        Object.recompute()
 
     def _merge(self, object_ids, dst_object=None, extra_checks=True):
         """private implementation of merge object
@@ -344,6 +366,7 @@ class MergeObject(models.TransientModel):
         self._update_foreign_keys(src_objects, dst_object)
         self._update_reference_fields(src_objects, dst_object)
         self._update_values(src_objects, dst_object)
+        self._update_computed_fields(dst_object)
 
         self._log_merge_operation(src_objects, dst_object)
 

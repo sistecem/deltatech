@@ -12,8 +12,7 @@ from odoo.tools.safe_eval import safe_eval
 class StockMove(models.Model):
     _inherit = "stock.move"
 
-    def _get_price_unit(self):
-        """Returns the unit price to store on the quant"""
+    def update_prices(self):
         if self.purchase_line_id and self.product_id == self.purchase_line_id.product_id:
             get_param = self.env["ir.config_parameter"].sudo().get_param
             update_product_price = get_param("purchase.update_product_price", default="False")
@@ -32,7 +31,7 @@ class StockMove(models.Model):
             from_currency = self.env.user.company_id.currency_id
             seller_ids = self.product_id.seller_ids or self.product_id.product_tmpl_id.seller_ids
             for seller in seller_ids:
-                if seller.name == self.purchase_line_id.order_id.partner_id:
+                if seller.name == self.purchase_line_id.order_id.partner_id.commercial_partner_id:
                     if seller.min_qty == 0.0 and seller.date_start is False and seller.date_end is False:
                         # conversia ar trebui deja sa fie facuta de _get_stock_move_price_unit()
                         to_currency = seller.currency_id or self.env.user.company_id.currency_id
@@ -48,19 +47,14 @@ class StockMove(models.Model):
             if update_standard_price:
                 self.product_id.write({"standard_price": price_unit})
 
-            return price_unit
-
-        return super(StockMove, self)._get_price_unit()
-
     def product_price_update_before_done(self, forced_qty=None):
-        super(StockMove, self).product_price_update_before_done(forced_qty)
-        tmpl_dict = defaultdict(lambda: 0.0)
+        super().product_price_update_before_done(forced_qty)
+        tmpl_dict = defaultdict(float)
         # adapt standard price on incomming moves if the product cost_method is 'average'
         std_price_update = {}
         for move in self.filtered(
             lambda move: move._is_in() and move.with_company(move.company_id).product_id.cost_method == "fifo"
         ):
-
             product_tot_qty_available = move.product_id.sudo().with_company(move.company_id).quantity_svl
             product_tot_val = move.product_id.sudo().with_company(move.company_id).value_svl
 
@@ -82,11 +76,17 @@ class StockMove(models.Model):
                 new_std_price = move._get_price_unit()
             else:
                 new_std_price = (product_tot_val + (move._get_price_unit() * qty)) / (product_tot_qty_available + qty)
-
+            move.update_prices()
             tmpl_dict[move.product_id.id] += qty_done
             # Write the standard price, as SUPERUSER_ID because a warehouse manager may not have the right to write on products
-            move.product_id.with_company(move.company_id).sudo().write({"standard_price": new_std_price})
+            # move.product_id.with_company(move.company_id).sudo().write({"standard_price": new_std_price})
             std_price_update[move.company_id.id, move.product_id.id] = new_std_price
+        # update prices for average/standard cost products
+        for move in self.filtered(
+            lambda move: move._is_in()
+            and move.with_company(move.company_id).product_id.cost_method in ["average", "standard"]
+        ):
+            move.update_prices()
 
 
 class StockPicking(models.Model):

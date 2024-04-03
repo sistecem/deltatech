@@ -19,7 +19,7 @@ class StockPicking(models.Model):
             picking.agreement_id = picking.equipment_id.agreement_id
 
     def button_validate(self):
-        res = super(StockPicking, self).button_validate()
+        res = super().button_validate()
         for picking in self:
             if picking.agreement_id:
                 svls = picking.move_lines.stock_valuation_layer_ids
@@ -28,6 +28,8 @@ class StockPicking(models.Model):
                     value += svl.value
                 cons_value = picking.agreement_id.total_costs + value
                 picking.agreement_id.sudo().write({"total_costs": cons_value})
+            if picking.equipment_id:
+                picking.equipment_id.compute_totals()
         return res
 
     def check_consumable(self):

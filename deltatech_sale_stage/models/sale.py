@@ -10,15 +10,16 @@ from odoo.exceptions import UserError
 class SaleOrder(models.Model):
     _inherit = "sale.order"
 
-    stage_id = fields.Many2one("sale.order.stage", string="Stage", copy=False)
+    stage_id = fields.Many2one("sale.order.stage", string="Stage", copy=False, tracking=True)
     stage_ids = fields.Many2many("sale.order.stage", string="Stage", compute="_compute_stage_ids")
 
+    @api.depends("stage_id")
     def _compute_stage_ids(self):
         for order in self:
             order.stage_ids = order.stage_id
 
     def _get_invoice_status(self):
-        super(SaleOrder, self)._get_invoice_status()
+        super()._get_invoice_status()
         orders_invoiced = self.filtered(lambda o: o.invoice_status == "invoiced")
         orders_invoiced.set_stage("invoiced")
 
@@ -28,11 +29,11 @@ class SaleOrder(models.Model):
             raise UserError(_("The order was not invoiced"))
 
     def action_confirm(self):
-        super(SaleOrder, self).action_confirm()
+        super().action_confirm()
         self.set_stage("confirmed")
 
     def action_quotation_sent(self):
-        super(SaleOrder, self).action_confirm()
+        super().action_quotation_sent()
         self.set_stage("send_email")
 
     def set_stage(self, stage_step):
@@ -44,7 +45,7 @@ class SaleOrder(models.Model):
                     order.stage_id = stage
 
     def write(self, vals):
-        res = super(SaleOrder, self).write(vals)
+        res = super().write(vals)
         if "stage_id" in vals:
             if self.stage_id.action_id:
                 self.stage_id.action_id.run()

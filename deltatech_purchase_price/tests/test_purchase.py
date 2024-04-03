@@ -8,7 +8,7 @@ from odoo.tests.common import TransactionCase
 
 class TestPurchase(TransactionCase):
     def setUp(self):
-        super(TestPurchase, self).setUp()
+        super().setUp()
         # se creeaza un furnizor
         self.partner_a = self.env["res.partner"].create({"name": "Test"})
 
@@ -18,6 +18,9 @@ class TestPurchase(TransactionCase):
         )
         self.product_b = self.env["product.product"].create(
             {"name": "Test B", "type": "product", "standard_price": 100, "list_price": 150, "seller_ids": seller_ids}
+        )
+        self.system_parameter1 = self.env["ir.config_parameter"].create(
+            {"key": "purchase.update_product_price", "value": "True"}
         )
 
     def test_purchase(self):
@@ -44,4 +47,4 @@ class TestPurchase(TransactionCase):
         self.picking.button_validate()
 
         # se verifica ultimul pret de achizitie
-        self.assertEqual(self.product_a.last_purchase_price, 10)
+        self.assertEqual(self.product_a.last_purchase_price, 10.0)
